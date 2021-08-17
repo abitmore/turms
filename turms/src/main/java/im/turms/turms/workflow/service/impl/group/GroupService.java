@@ -37,6 +37,7 @@ import im.turms.server.common.mongo.operation.option.Filter;
 import im.turms.server.common.mongo.operation.option.QueryOptions;
 import im.turms.server.common.mongo.operation.option.Update;
 import im.turms.server.common.util.AssertUtil;
+import im.turms.server.common.util.DateUtil;
 import im.turms.server.common.util.ExceptionUtil;
 import im.turms.turms.bo.ServicePermission;
 import im.turms.turms.constant.OperationResultConstant;
@@ -597,23 +598,18 @@ public class GroupService {
                 .switchIfEmpty(Mono.error(TurmsBusinessException.get(TurmsStatusCode.UPDATE_INFO_OF_NON_EXISTING_GROUP)))
                 .flatMap(groupType -> {
                     GroupUpdateStrategy groupUpdateStrategy = groupType.getGroupInfoUpdateStrategy();
-                    switch (groupUpdateStrategy) {
-                        case OWNER:
-                            return groupMemberService.isOwner(requesterId, groupId)
-                                    .map(isOwner -> isOwner ? TurmsStatusCode.OK : TurmsStatusCode.NOT_OWNER_TO_UPDATE_GROUP_INFO);
-                        case OWNER_MANAGER:
-                            return groupMemberService.isOwnerOrManager(requesterId, groupId)
-                                    .map(isOwnerOrManager -> isOwnerOrManager
-                                            ? TurmsStatusCode.OK
-                                            : TurmsStatusCode.NOT_OWNER_OR_MANAGER_TO_UPDATE_GROUP_INFO);
-                        case OWNER_MANAGER_MEMBER:
-                            return groupMemberService.isOwnerOrManagerOrMember(requesterId, groupId)
-                                    .map(isMember -> isMember ? TurmsStatusCode.OK : TurmsStatusCode.NOT_MEMBER_TO_UPDATE_GROUP_INFO);
-                        case ALL:
-                            return Mono.just(TurmsStatusCode.OK);
-                        default:
-                            return Mono.error(new IllegalStateException("Unexpected value: " + groupUpdateStrategy));
-                    }
+                    return switch (groupUpdateStrategy) {
+                        case OWNER -> groupMemberService.isOwner(requesterId, groupId)
+                                .map(isOwner -> isOwner ? TurmsStatusCode.OK : TurmsStatusCode.NOT_OWNER_TO_UPDATE_GROUP_INFO);
+                        case OWNER_MANAGER -> groupMemberService.isOwnerOrManager(requesterId, groupId)
+                                .map(isOwnerOrManager -> isOwnerOrManager
+                                        ? TurmsStatusCode.OK
+                                        : TurmsStatusCode.NOT_OWNER_OR_MANAGER_TO_UPDATE_GROUP_INFO);
+                        case OWNER_MANAGER_MEMBER -> groupMemberService.isOwnerOrManagerOrMember(requesterId, groupId)
+                                .map(isMember -> isMember ? TurmsStatusCode.OK : TurmsStatusCode.NOT_MEMBER_TO_UPDATE_GROUP_INFO);
+                        case ALL -> Mono.just(TurmsStatusCode.OK);
+                        default -> Mono.error(new IllegalStateException("Unexpected value: " + groupUpdateStrategy));
+                    };
                 })
                 .flatMap(code -> code == TurmsStatusCode.OK
                         ? updateGroupInformation(groupId, typeId, creatorId, ownerId, name, intro,
@@ -625,13 +621,13 @@ public class GroupService {
             @NotNull Long groupId,
             @Nullable Date lastUpdatedDate) {
         return groupVersionService.queryInfoVersion(groupId)
-                .flatMap(version -> lastUpdatedDate == null || lastUpdatedDate.before(version)
-                        ? mongoClient.findById(Group.class, groupId)
+                .flatMap(version -> DateUtil.isAfterOrSame(lastUpdatedDate, version)
+                        ? Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE))
+                        : mongoClient.findById(Group.class, groupId)
                         .map(group -> GroupsWithVersion.newBuilder()
                                 .addGroups(ProtoModelUtil.group2proto(group))
                                 .setLastUpdatedDate(version.getTime())
-                                .build())
-                        : Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE)))
+                                .build()))
                 .switchIfEmpty(Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE)));
     }
 
@@ -675,22 +671,21 @@ public class GroupService {
         return userVersionService
                 .queryJoinedGroupVersion(memberId)
                 .flatMap(version -> {
-                    if (lastUpdatedDate == null || lastUpdatedDate.before(version)) {
-                        return queryJoinedGroupIds(memberId)
-                                .collectList()
-                                .map(ids -> {
-                                    if (ids.isEmpty()) {
-                                        throw TurmsBusinessException.get(TurmsStatusCode.NO_CONTENT);
-                                    }
-                                    return Int64ValuesWithVersion
-                                            .newBuilder()
-                                            .addAllValues(ids)
-                                            .setLastUpdatedDate(version.getTime())
-                                            .build();
-                                });
-                    } else {
+                    if (DateUtil.isAfterOrSame(lastUpdatedDate, version)) {
                         return Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE));
                     }
+                    return queryJoinedGroupIds(memberId)
+                            .collectList()
+                            .map(ids -> {
+                                if (ids.isEmpty()) {
+                                    throw TurmsBusinessException.get(TurmsStatusCode.NO_CONTENT);
+                                }
+                                return Int64ValuesWithVersion
+                                        .newBuilder()
+                                        .addAllValues(ids)
+                                        .setLastUpdatedDate(version.getTime())
+                                        .build();
+                            });
                 })
                 .switchIfEmpty(Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE)));
     }
@@ -701,24 +696,23 @@ public class GroupService {
         return userVersionService
                 .queryJoinedGroupVersion(memberId)
                 .flatMap(version -> {
-                    if (lastUpdatedDate == null || lastUpdatedDate.before(version)) {
-                        return queryJoinedGroups(memberId)
-                                .collectList()
-                                .map(groups -> {
-                                    if (groups.isEmpty()) {
-                                        throw TurmsBusinessException.get(TurmsStatusCode.NO_CONTENT);
-                                    }
-                                    GroupsWithVersion.Builder builder = GroupsWithVersion.newBuilder();
-                                    for (Group group : groups) {
-                                        builder.addGroups(ProtoModelUtil.group2proto(group));
-                                    }
-                                    return builder
-                                            .setLastUpdatedDate(version.getTime())
-                                            .build();
-                                });
-                    } else {
+                    if (DateUtil.isAfterOrSame(lastUpdatedDate, version)) {
                         return Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE));
                     }
+                    return queryJoinedGroups(memberId)
+                            .collectList()
+                            .map(groups -> {
+                                if (groups.isEmpty()) {
+                                    throw TurmsBusinessException.get(TurmsStatusCode.NO_CONTENT);
+                                }
+                                GroupsWithVersion.Builder builder = GroupsWithVersion.newBuilder();
+                                for (Group group : groups) {
+                                    builder.addGroups(ProtoModelUtil.group2proto(group));
+                                }
+                                return builder
+                                        .setLastUpdatedDate(version.getTime())
+                                        .build();
+                            });
                 })
                 .switchIfEmpty(Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE)));
     }
@@ -931,7 +925,7 @@ public class GroupService {
     private Mono<Set<Long>> getGroupIdsFromGroupIdsAndMemberIds(@Nullable Set<Long> groupIds, @Nullable Set<Long> memberIds) {
         if (memberIds != null) {
             Mono<Set<Long>> joinedGroupIdsMono = groupMemberService
-                    .queryUsersJoinedGroupsIds(memberIds, null, null)
+                    .queryUsersJoinedGroupIds(memberIds, null, null)
                     .collect(Collectors.toSet());
             return groupIds != null ?
                     joinedGroupIdsMono.map(ids -> {

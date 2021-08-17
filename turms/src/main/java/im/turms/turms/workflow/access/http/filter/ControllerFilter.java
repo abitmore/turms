@@ -24,6 +24,7 @@ import im.turms.server.common.logging.RequestLoggingContext;
 import im.turms.server.common.tracing.TracingCloseableContext;
 import im.turms.server.common.tracing.TracingContext;
 import im.turms.turms.plugin.manager.TurmsPluginManager;
+import im.turms.turms.workflow.access.http.performance.InefficientParam;
 import im.turms.turms.workflow.access.http.permission.RequiredPermission;
 import im.turms.turms.workflow.service.impl.admin.AdminService;
 import im.turms.turms.workflow.service.impl.log.AdminActionLogService;
@@ -40,11 +41,13 @@ import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpRequestDecorator;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
+import org.springframework.util.ConcurrentReferenceHashMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
 import org.springframework.web.cors.reactive.CorsUtils;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.reactive.result.method.annotation.RequestMappingHandlerMapping;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
@@ -53,8 +56,12 @@ import reactor.core.publisher.Mono;
 
 import javax.validation.constraints.NotNull;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 import static org.springframework.http.HttpHeaders.WWW_AUTHENTICATE;
@@ -78,6 +85,8 @@ public class ControllerFilter implements WebFilter {
     private final boolean pluginEnabled;
     private final boolean enableAdminApi;
     private final boolean isOpenApiEnabled;
+
+    private final Map<HandlerMethod, Api> apiCache = new ConcurrentReferenceHashMap<>(256);
 
     /**
      * @param springDocConfigProperties {@link org.springdoc.core.SpringDocConfiguration}
@@ -112,13 +121,65 @@ public class ControllerFilter implements WebFilter {
                 });
     }
 
+    private Api getApi(HandlerMethod handlerMethod) {
+        return apiCache.computeIfAbsent(handlerMethod, method -> {
+            RequiredPermission requiredPermission = method.getMethodAnnotation(RequiredPermission.class);
+            Map<String, String[]> map = Collections.emptyMap();
+            for (MethodParameter parameter : method.getMethodParameters()) {
+                InefficientParam param = parameter.getParameterAnnotation(InefficientParam.class);
+                if (param != null) {
+                    if (map.isEmpty()) {
+                        map = new HashMap<>(16);
+                    }
+                    map.put(parameter.getParameterName(), param.efficientCompanions());
+                }
+            }
+            return new Api(requiredPermission, map);
+        });
+    }
+
+    private Mono<Void> passOrRespondWith406IfInefficient(
+            WebFilterChain chain,
+            ServerWebExchange exchange,
+            Api api) {
+        if (node.getSharedProperties().getService().getAdminApi().isAllowInefficientParams()) {
+            return chain.filter(exchange);
+        }
+        MultiValueMap<String, String> params = exchange.getRequest().getQueryParams();
+        for (Map.Entry<String, String[]> entry : api.illegalParams().entrySet()) {
+            String inefficientParam = entry.getKey();
+            if (params.containsKey(inefficientParam)) { // TODO: check value
+                String[] companions = entry.getValue();
+                int length = companions.length;
+                String reason = null;
+                if (length > 0) {
+                    for (String companion : companions) {
+                        if (!params.containsKey(companion)) {
+                            reason = "The inefficient param \"" + inefficientParam
+                                    + "\" should come with the params " + Arrays.toString(companions);
+                            break;
+                        }
+                    }
+                } else {
+                    reason = "The inefficient param \"" + inefficientParam + "\" isn't allowed";
+                }
+                if (reason != null) {
+                    return Mono.error(new ResponseStatusException(HttpStatus.NOT_ACCEPTABLE,
+                            reason));
+                }
+            }
+        }
+        return chain.filter(exchange);
+    }
+
     private Mono<Void> filterHandlerMethod(HandlerMethod handlerMethod, ServerWebExchange exchange, WebFilterChain chain) {
         if (isOpenApiEnabledAndOpenApiRequest(handlerMethod)) {
             return chain.filter(exchange);
         }
-        RequiredPermission requiredPermission = handlerMethod.getMethodAnnotation(RequiredPermission.class);
+        Api api = getApi(handlerMethod);
+        RequiredPermission requiredPermission = api.permission();
         if (requiredPermission == null) {
-            return chain.filter(exchange);
+            return passOrRespondWith406IfInefficient(chain, exchange, api);
         }
         if (!enableAdminApi) {
             exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
@@ -133,12 +194,12 @@ public class ControllerFilter implements WebFilter {
         exchange.getAttributes().put(ATTRIBUTES_ACCOUNT, account);
         return adminService.authenticate(account, password)
                 .flatMap(authenticated -> {
-                    if (authenticated == null || !authenticated) {
+                    if (!authenticated) {
                         return respondWith401(exchange.getResponse());
                     }
                     return adminService.isAdminAuthorized(exchange, account, requiredPermission.value())
                             .flatMap(authorized -> authorized
-                                    ? tryPersistAndPass(account, exchange, chain, handlerMethod)
+                                    ? tryPersistAndPass(account, exchange, chain, handlerMethod, api)
                                     : respondWith401(exchange.getResponse()));
                 });
     }
@@ -207,10 +268,11 @@ public class ControllerFilter implements WebFilter {
     }
 
     private Mono<Void> tryPersistAndPass(
-            @NotNull String account,
-            @NotNull ServerWebExchange exchange,
-            @NotNull WebFilterChain chain,
-            @NotNull HandlerMethod handlerMethod) {
+            String account,
+            ServerWebExchange exchange,
+            WebFilterChain chain,
+            HandlerMethod handlerMethod,
+            Api api) {
         boolean logAdminAction = node.getSharedProperties().getService().getLog().isLogAdminAction();
         boolean triggerHandlers = pluginEnabled && !turmsPluginManager.getAdminActionHandlerList().isEmpty();
         Mono<Void> additionalMono;
@@ -248,7 +310,7 @@ public class ControllerFilter implements WebFilter {
         return additionalMono
                 .then(Mono.defer(() -> {
                     try (TracingCloseableContext ignored = tracingContext.asCloseable()) {
-                        return chain.filter(finalExchange);
+                        return passOrRespondWith406IfInefficient(chain, finalExchange, api);
                     }
                 }))
                 .contextWrite(context -> {
@@ -259,6 +321,9 @@ public class ControllerFilter implements WebFilter {
                 .doFinally(signalType -> finalExchange.getAttributes().remove(ATTR_BODY));
     }
 
+    /**
+     * Valid query params are the params requested by API
+     */
     private DBObject parseValidParams(ServerHttpRequest request, HandlerMethod handlerMethod) {
         MethodParameter[] methodParameters = handlerMethod.getMethodParameters();
         MultiValueMap<String, String> queryParams = request.getQueryParams();

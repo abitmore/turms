@@ -90,20 +90,13 @@ public class AdminRoleService {
                 .doOnNext(event -> {
                     AdminRole adminRole = event.getFullDocument();
                     switch (event.getOperationType()) {
-                        case INSERT:
-                        case UPDATE:
-                        case REPLACE:
-                            roles.put(adminRole.getId(), adminRole);
-                            break;
-                        case DELETE:
+                        case INSERT, UPDATE, REPLACE -> roles.put(adminRole.getId(), adminRole);
+                        case DELETE -> {
                             long roleId = ChangeStreamUtil.getIdAsLong(event.getDocumentKey());
                             roles.remove(roleId);
-                            break;
-                        case INVALIDATE:
-                            resetRoles();
-                            break;
-                        default:
-                            log.fatal("Detect an illegal operation on AdminRole collection: " + event);
+                        }
+                        case INVALIDATE -> resetRoles();
+                        default -> log.fatal("Detect an illegal operation on AdminRole collection: " + event);
                     }
                 })
                 .onErrorContinue(

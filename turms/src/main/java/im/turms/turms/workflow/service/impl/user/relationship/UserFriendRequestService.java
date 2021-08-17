@@ -38,6 +38,7 @@ import im.turms.server.common.mongo.operation.option.QueryOptions;
 import im.turms.server.common.mongo.operation.option.Update;
 import im.turms.server.common.property.TurmsPropertiesManager;
 import im.turms.server.common.util.AssertUtil;
+import im.turms.server.common.util.DateUtil;
 import im.turms.turms.constant.DaoConstant;
 import im.turms.turms.constant.OperationResultConstant;
 import im.turms.turms.constraint.ValidRequestStatus;
@@ -221,7 +222,7 @@ public class UserFriendRequestService extends ExpirableModelService<UserFriendRe
                     // Allow to create a friend request even there is already an accepted request
                     // because the relationships can be deleted and rebuilt
                     Mono<Boolean> requestExistsMono = node.getSharedProperties().getService().getUser().getFriendRequest()
-                            .isAllowResendingRequestAfterDeclinedOrIgnoredOrExpired()
+                            .isAllowSendRequestAfterDeclinedOrIgnoredOrExpired()
                             ? hasPendingFriendRequest(requesterId, recipientId)
                             : hasPendingOrDeclinedOrIgnoredOrExpiredRequest(requesterId, recipientId);
                     return requestExistsMono.flatMap(requestExists -> {
@@ -344,23 +345,19 @@ public class UserFriendRequestService extends ExpirableModelService<UserFriendRe
                     if (!request.getRecipientId().equals(requesterId)) {
                         return Mono.error(TurmsBusinessException.get(TurmsStatusCode.REQUESTER_NOT_FRIEND_REQUEST_RECIPIENT));
                     }
-                    switch (action) {
-                        case ACCEPT:
-                            return mongoClient.inTransaction(
-                                            session -> updatePendingFriendRequestStatus(friendRequestId, RequestStatus.ACCEPTED, reason, session)
-                                                    .then(userRelationshipService.friendTwoUsers(request.getRequesterId(), requesterId, session))
-                                                    .then())
-                                    .retryWhen(DaoConstant.TRANSACTION_RETRY);
-                        case IGNORE:
-                            return updatePendingFriendRequestStatus(friendRequestId, RequestStatus.IGNORED, reason, null)
-                                    .then();
-                        case DECLINE:
-                            return updatePendingFriendRequestStatus(friendRequestId, RequestStatus.DECLINED, reason, null)
-                                    .then();
-                        default:
-                            return Mono.error(TurmsBusinessException
-                                    .get(TurmsStatusCode.ILLEGAL_ARGUMENT, "The response action must not be UNRECOGNIZED"));
-                    }
+                    return switch (action) {
+                        case ACCEPT -> mongoClient.inTransaction(
+                                        session -> updatePendingFriendRequestStatus(friendRequestId, RequestStatus.ACCEPTED, reason, session)
+                                                .then(userRelationshipService.friendTwoUsers(request.getRequesterId(), requesterId, session))
+                                                .then())
+                                .retryWhen(DaoConstant.TRANSACTION_RETRY);
+                        case IGNORE -> updatePendingFriendRequestStatus(friendRequestId, RequestStatus.IGNORED, reason, null)
+                                .then();
+                        case DECLINE -> updatePendingFriendRequestStatus(friendRequestId, RequestStatus.DECLINED, reason, null)
+                                .then();
+                        default -> Mono.error(TurmsBusinessException
+                                .get(TurmsStatusCode.ILLEGAL_ARGUMENT, "The response action must not be UNRECOGNIZED"));
+                    };
                 });
     }
 
@@ -373,28 +370,27 @@ public class UserFriendRequestService extends ExpirableModelService<UserFriendRe
                 : userVersionService.queryReceivedFriendRequestsVersion(userId);
         return versionMono
                 .flatMap(version -> {
-                    if (lastUpdatedDate == null || lastUpdatedDate.before(version)) {
-                        Flux<UserFriendRequest> requestFlux = areSentByUser
-                                ? queryFriendRequestsByRequesterId(userId)
-                                : queryFriendRequestsByRecipientId(userId);
-                        return requestFlux
-                                .collectList()
-                                .map(requests -> {
-                                    if (requests.isEmpty()) {
-                                        throw TurmsBusinessException.get(TurmsStatusCode.NO_CONTENT);
-                                    }
-                                    UserFriendRequestsWithVersion.Builder builder = UserFriendRequestsWithVersion.newBuilder();
-                                    int expireAfterSeconds = getModelExpireAfterSeconds();
-                                    for (UserFriendRequest request : requests) {
-                                        builder.addUserFriendRequests(ProtoModelUtil.friendRequest2proto(request, expireAfterSeconds));
-                                    }
-                                    return builder
-                                            .setLastUpdatedDate(version.getTime())
-                                            .build();
-                                });
-                    } else {
+                    if (DateUtil.isAfterOrSame(lastUpdatedDate, version)) {
                         return Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE));
                     }
+                    Flux<UserFriendRequest> requestFlux = areSentByUser
+                            ? queryFriendRequestsByRequesterId(userId)
+                            : queryFriendRequestsByRecipientId(userId);
+                    return requestFlux
+                            .collectList()
+                            .map(requests -> {
+                                if (requests.isEmpty()) {
+                                    throw TurmsBusinessException.get(TurmsStatusCode.NO_CONTENT);
+                                }
+                                UserFriendRequestsWithVersion.Builder builder = UserFriendRequestsWithVersion.newBuilder();
+                                int expireAfterSeconds = getModelExpireAfterSeconds();
+                                for (UserFriendRequest request : requests) {
+                                    builder.addUserFriendRequests(ProtoModelUtil.friendRequest2proto(request, expireAfterSeconds));
+                                }
+                                return builder
+                                        .setLastUpdatedDate(version.getTime())
+                                        .build();
+                            });
                 })
                 .switchIfEmpty(Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE)));
     }

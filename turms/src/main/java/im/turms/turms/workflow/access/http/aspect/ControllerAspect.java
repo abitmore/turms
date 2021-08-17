@@ -32,7 +32,7 @@ public class ControllerAspect {
     }
 
     private boolean isValidDeleteRequest(ProceedingJoinPoint point) {
-        if (node.getSharedProperties().getService().getAdminApi().isAllowDeletingWithoutFilter()) {
+        if (node.getSharedProperties().getService().getAdminApi().isAllowDeleteWithoutFilter()) {
             return true;
         }
         Object[] args = point.getArgs();

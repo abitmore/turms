@@ -34,6 +34,7 @@ import im.turms.server.common.mongo.operation.option.Filter;
 import im.turms.server.common.mongo.operation.option.QueryOptions;
 import im.turms.server.common.mongo.operation.option.Update;
 import im.turms.server.common.util.AssertUtil;
+import im.turms.server.common.util.DateUtil;
 import im.turms.turms.constant.DaoConstant;
 import im.turms.turms.constant.OperationResultConstant;
 import im.turms.turms.constraint.ValidGroupBlockedUserKey;
@@ -218,22 +219,22 @@ public class GroupBlocklistService {
         return groupVersionService
                 .queryBlocklistVersion(groupId)
                 .flatMap(version -> {
-                    if (lastUpdatedDate == null || lastUpdatedDate.before(version)) {
-                        return queryGroupBlockedUserIds(groupId)
-                                .collect(Collectors.toSet())
-                                .map(ids -> {
-                                    if (ids.isEmpty()) {
-                                        throw TurmsBusinessException.get(TurmsStatusCode.NO_CONTENT);
-                                    }
-                                    return Int64ValuesWithVersion
-                                            .newBuilder()
-                                            .setLastUpdatedDate(version.getTime())
-                                            .addAllValues(ids)
-                                            .build();
-                                });
-                    } else {
+                    if (DateUtil.isAfterOrSame(lastUpdatedDate, version)) {
                         return Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE));
                     }
+                    return queryGroupBlockedUserIds(groupId)
+                            .collect(Collectors.toSet())
+                            .map(ids -> {
+                                if (ids.isEmpty()) {
+                                    throw TurmsBusinessException.get(TurmsStatusCode.NO_CONTENT);
+                                }
+                                return Int64ValuesWithVersion
+                                        .newBuilder()
+                                        .setLastUpdatedDate(version.getTime())
+                                        .addAllValues(ids)
+                                        .build();
+                            });
+
                 })
                 .switchIfEmpty(Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE)));
     }
@@ -249,32 +250,32 @@ public class GroupBlocklistService {
         return groupVersionService
                 .queryBlocklistVersion(groupId)
                 .flatMap(version -> {
-                    if (lastUpdatedDate == null || lastUpdatedDate.before(version)) {
-                        return queryGroupBlockedUserIds(groupId)
-                                .collect(Collectors.toSet())
-                                .flatMapMany(ids -> {
-                                    if (ids.isEmpty()) {
-                                        throw TurmsBusinessException.get(TurmsStatusCode.NO_CONTENT);
-                                    } else {
-                                        return userService.queryUsersProfiles(ids, false);
-                                    }
-                                })
-                                .collect(Collectors.toSet())
-                                .map(users -> {
-                                    if (users.isEmpty()) {
-                                        throw TurmsBusinessException.get(TurmsStatusCode.NO_CONTENT);
-                                    }
-                                    UsersInfosWithVersion.Builder builder = UsersInfosWithVersion.newBuilder();
-                                    builder.setLastUpdatedDate(version.getTime());
-                                    for (User user : users) {
-                                        UserInfo userInfo = ProtoModelUtil.userProfile2proto(user).build();
-                                        builder.addUserInfos(userInfo);
-                                    }
-                                    return builder.build();
-                                });
-                    } else {
+                    if (DateUtil.isAfterOrSame(lastUpdatedDate, version)) {
                         return Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE));
                     }
+                    return queryGroupBlockedUserIds(groupId)
+                            .collect(Collectors.toSet())
+                            .flatMapMany(ids -> {
+                                if (ids.isEmpty()) {
+                                    throw TurmsBusinessException.get(TurmsStatusCode.NO_CONTENT);
+                                } else {
+                                    return userService.queryUsersProfiles(ids, false);
+                                }
+                            })
+                            .collect(Collectors.toSet())
+                            .map(users -> {
+                                if (users.isEmpty()) {
+                                    throw TurmsBusinessException.get(TurmsStatusCode.NO_CONTENT);
+                                }
+                                UsersInfosWithVersion.Builder builder = UsersInfosWithVersion.newBuilder();
+                                builder.setLastUpdatedDate(version.getTime());
+                                for (User user : users) {
+                                    UserInfo userInfo = ProtoModelUtil.userProfile2proto(user).build();
+                                    builder.addUserInfos(userInfo);
+                                }
+                                return builder.build();
+                            });
+
                 })
                 .switchIfEmpty(Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE)));
     }

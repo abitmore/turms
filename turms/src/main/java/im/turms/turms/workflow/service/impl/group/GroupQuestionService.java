@@ -34,6 +34,7 @@ import im.turms.server.common.mongo.operation.option.QueryOptions;
 import im.turms.server.common.mongo.operation.option.Update;
 import im.turms.server.common.util.AssertUtil;
 import im.turms.server.common.util.CollectorUtil;
+import im.turms.server.common.util.DateUtil;
 import im.turms.turms.bo.GroupQuestionIdAndAnswer;
 import im.turms.turms.constant.DaoConstant;
 import im.turms.turms.constant.OperationResultConstant;
@@ -313,25 +314,24 @@ public class GroupQuestionService {
                         ? groupVersionService.queryGroupJoinQuestionsVersion(groupId)
                         : Mono.error(TurmsBusinessException.get(TurmsStatusCode.NOT_OWNER_OR_MANAGER_TO_ACCESS_GROUP_QUESTION_ANSWER)))
                 .flatMap(version -> {
-                    if (lastUpdatedDate == null || lastUpdatedDate.before(version)) {
-                        return queryGroupJoinQuestions(null, Set.of(groupId), null, null, false)
-                                .collect(Collectors.toSet())
-                                .map(groupJoinQuestions -> {
-                                    if (groupJoinQuestions.isEmpty()) {
-                                        throw TurmsBusinessException.get(TurmsStatusCode.NO_CONTENT);
-                                    }
-                                    GroupJoinQuestionsWithVersion.Builder builder = GroupJoinQuestionsWithVersion.newBuilder();
-                                    builder.setLastUpdatedDate(version.getTime());
-                                    for (GroupJoinQuestion question : groupJoinQuestions) {
-                                        im.turms.common.model.bo.group.GroupJoinQuestion.Builder questionBuilder =
-                                                ProtoModelUtil.groupJoinQuestion2proto(question);
-                                        builder.addGroupJoinQuestions(questionBuilder.build());
-                                    }
-                                    return builder.build();
-                                });
-                    } else {
+                    if (DateUtil.isAfterOrSame(lastUpdatedDate, version)) {
                         return Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE));
                     }
+                    return queryGroupJoinQuestions(null, Set.of(groupId), null, null, false)
+                            .collect(Collectors.toSet())
+                            .map(groupJoinQuestions -> {
+                                if (groupJoinQuestions.isEmpty()) {
+                                    throw TurmsBusinessException.get(TurmsStatusCode.NO_CONTENT);
+                                }
+                                GroupJoinQuestionsWithVersion.Builder builder = GroupJoinQuestionsWithVersion.newBuilder();
+                                builder.setLastUpdatedDate(version.getTime());
+                                for (GroupJoinQuestion question : groupJoinQuestions) {
+                                    im.turms.common.model.bo.group.GroupJoinQuestion.Builder questionBuilder =
+                                            ProtoModelUtil.groupJoinQuestion2proto(question);
+                                    builder.addGroupJoinQuestions(questionBuilder.build());
+                                }
+                                return builder.build();
+                            });
                 })
                 .switchIfEmpty(Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE)));
     }

@@ -47,7 +47,12 @@ public class AdminApiProperties {
             "Better false to prevent administrators from deleting all data by accident")
     @GlobalProperty
     @JsonView(MutablePropertiesView.class)
-    private boolean allowDeletingWithoutFilter;
+    private boolean allowDeleteWithoutFilter;
+
+    @Description("The allowed performance level for filters")
+    @GlobalProperty
+    @JsonView(MutablePropertiesView.class)
+    private AllowedPerformanceLevel allowedPerformanceLevel = AllowedPerformanceLevel.PART_IXSCAN_PART_COLLSCAN;
 
     // FIXME: The property is unused
     @Description("The maximum day difference per query request")
@@ -97,4 +102,22 @@ public class AdminApiProperties {
     @NestedConfigurationProperty
     private AddressProperties address = new AddressProperties();
 
+    public enum AllowedPerformanceLevel {
+        /**
+         * The filter uses only index scans or there is collection scans in a tiny collection
+         * (usually less than 100 entries)
+         */
+        PART_IXSCAN_PART_TINY_COLLSCAN,
+        /**
+         * The filter uses both index scans and collection scans.
+         * Most operations are allowed and the performance is acceptable in practice,
+         */
+        PART_IXSCAN_PART_COLLSCAN,
+        /**
+         * The filter uses only collection scans and there is no index scan.
+         * All operations are allowed.
+         * Only use the level if you know what you are doing.
+         */
+        ALL_COLLSCAN
+    }
 }

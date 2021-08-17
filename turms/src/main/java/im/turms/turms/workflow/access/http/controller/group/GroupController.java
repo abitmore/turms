@@ -28,6 +28,8 @@ import im.turms.turms.constant.DivideBy;
 import im.turms.turms.workflow.access.http.dto.request.group.AddGroupDTO;
 import im.turms.turms.workflow.access.http.dto.request.group.GroupStatisticsDTO;
 import im.turms.turms.workflow.access.http.dto.request.group.UpdateGroupDTO;
+import im.turms.turms.workflow.access.http.performance.AbsoluteEfficientParam;
+import im.turms.turms.workflow.access.http.performance.InefficientParam;
 import im.turms.turms.workflow.access.http.permission.RequiredPermission;
 import im.turms.turms.workflow.access.http.util.DateTimeUtil;
 import im.turms.turms.workflow.access.http.util.PageUtil;
@@ -98,19 +100,19 @@ public class GroupController {
     @GetMapping
     @RequiredPermission(GROUP_QUERY)
     public Mono<ResponseEntity<ResponseDTO<Collection<Group>>>> queryGroups(
-            @RequestParam(required = false) Set<Long> ids,
-            @RequestParam(required = false) Set<Long> typeIds,
-            @RequestParam(required = false) Set<Long> creatorIds,
+            @RequestParam(required = false) @AbsoluteEfficientParam Set<Long> ids,
+            @RequestParam(required = false) @InefficientParam Set<Long> typeIds,
+            @RequestParam(required = false) @InefficientParam Set<Long> creatorIds,
             @RequestParam(required = false) Set<Long> ownerIds,
-            @RequestParam(required = false) Boolean isActive,
-            @RequestParam(required = false) Date creationDateStart,
-            @RequestParam(required = false) Date creationDateEnd,
+            @RequestParam(required = false) @InefficientParam Boolean isActive,
+            @RequestParam(required = false) @InefficientParam Date creationDateStart,
+            @RequestParam(required = false) @InefficientParam Date creationDateEnd,
             @RequestParam(required = false) Date deletionDateStart,
             @RequestParam(required = false) Date deletionDateEnd,
-            @RequestParam(required = false) Date muteEndDateStart,
-            @RequestParam(required = false) Date muteEndDateEnd,
+            @RequestParam(required = false) @InefficientParam Date muteEndDateStart,
+            @RequestParam(required = false) @InefficientParam Date muteEndDateEnd,
             @RequestParam(required = false) Set<Long> memberIds,
-            @RequestParam(required = false) Integer size) {
+            @RequestParam(required = false) @InefficientParam(efficientWithAny = true) Integer size) {
         size = pageUtil.getSize(size);
         Flux<Group> groupsFlux = groupService.queryGroups(
                 ids,
@@ -130,20 +132,20 @@ public class GroupController {
     @GetMapping("/page")
     @RequiredPermission(GROUP_QUERY)
     public Mono<ResponseEntity<ResponseDTO<PaginationDTO<Group>>>> queryGroups(
-            @RequestParam(required = false) Set<Long> ids,
-            @RequestParam(required = false) Set<Long> typeIds,
-            @RequestParam(required = false) Set<Long> creatorIds,
+            @RequestParam(required = false) @AbsoluteEfficientParam Set<Long> ids,
+            @RequestParam(required = false) @InefficientParam Set<Long> typeIds,
+            @RequestParam(required = false) @InefficientParam Set<Long> creatorIds,
             @RequestParam(required = false) Set<Long> ownerIds,
-            @RequestParam(required = false) Boolean isActive,
-            @RequestParam(required = false) Date creationDateStart,
-            @RequestParam(required = false) Date creationDateEnd,
+            @RequestParam(required = false) @InefficientParam Boolean isActive,
+            @RequestParam(required = false) @InefficientParam Date creationDateStart,
+            @RequestParam(required = false) @InefficientParam Date creationDateEnd,
             @RequestParam(required = false) Date deletionDateStart,
             @RequestParam(required = false) Date deletionDateEnd,
-            @RequestParam(required = false) Date muteEndDateStart,
-            @RequestParam(required = false) Date muteEndDateEnd,
+            @RequestParam(required = false) @InefficientParam Date muteEndDateStart,
+            @RequestParam(required = false) @InefficientParam Date muteEndDateEnd,
             @RequestParam(required = false) Set<Long> memberIds,
-            @RequestParam(defaultValue = "0") Integer page,
-            @RequestParam(required = false) Integer size) {
+            @RequestParam(defaultValue = "0") @InefficientParam(efficientWithAny = true) Integer page,
+            @RequestParam(required = false) @InefficientParam(efficientWithAny = true) Integer size) {
         size = pageUtil.getSize(size);
         Mono<Long> count = groupService.countGroups(
                 ids,
@@ -172,8 +174,8 @@ public class GroupController {
 
     @GetMapping("/count")
     public Mono<ResponseEntity<ResponseDTO<GroupStatisticsDTO>>> countGroups(
-            @RequestParam(required = false) Date createdStartDate,
-            @RequestParam(required = false) Date createdEndDate,
+            @RequestParam(required = false) @InefficientParam Date createdStartDate,
+            @RequestParam(required = false) @InefficientParam Date createdEndDate,
             @RequestParam(required = false) Date deletedStartDate,
             @RequestParam(required = false) Date deletedEndDate,
             @RequestParam(required = false) Date sentMessageStartDate,

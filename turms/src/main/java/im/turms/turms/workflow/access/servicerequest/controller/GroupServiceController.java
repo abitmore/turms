@@ -182,7 +182,7 @@ public class GroupServiceController {
     }
 
     @ServiceRequestMapping(QUERY_JOINED_GROUP_IDS_REQUEST)
-    public ClientRequestHandler handleQueryJoinedGroupsIdsRequest() {
+    public ClientRequestHandler handleQueryJoinedGroupIdsRequest() {
         return clientRequest -> {
             QueryJoinedGroupIdsRequest request = clientRequest.getTurmsRequest()
                     .getQueryJoinedGroupIdsRequest();

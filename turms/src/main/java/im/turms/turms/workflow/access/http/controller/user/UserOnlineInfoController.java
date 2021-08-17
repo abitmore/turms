@@ -141,9 +141,9 @@ public class UserOnlineInfoController {
 
     @GetMapping("/locations")
     @RequiredPermission(AdminPermission.USER_ONLINE_INFO_QUERY)
-    public Mono<ResponseEntity<ResponseDTO<List<UserLocationDTO>>>> queryUserLocations(@RequestParam Set<Long> ids,
-                                                                                       @RequestParam(required = false)
-                                                                                               DeviceType deviceType) {
+    public Mono<ResponseEntity<ResponseDTO<List<UserLocationDTO>>>> queryUserLocations(
+            @RequestParam Set<Long> ids,
+            @RequestParam(required = false) DeviceType deviceType) {
         List<Mono<Pair<Long, Point>>> monos = new ArrayList<>(ids.size());
         for (Long userId : ids) {
             monos.add(sessionLocationService.getUserLocation(userId, deviceType)

@@ -132,11 +132,11 @@ public class UserService {
                     .map(ServicePermission::get);
         } else {
             if (requesterId.equals(targetId)) {
-                return node.getSharedProperties().getService().getMessage().isAllowSendingMessagesToOneself()
+                return node.getSharedProperties().getService().getMessage().isAllowSendMessagesToOneself()
                         ? Mono.just(ServicePermission.OK)
                         : Mono.just(ServicePermission.get(TurmsStatusCode.SENDING_MESSAGES_TO_ONESELF_IS_DISABLED));
             } else {
-                if (node.getSharedProperties().getService().getMessage().isAllowSendingMessagesToStranger()) {
+                if (node.getSharedProperties().getService().getMessage().isAllowSendMessagesToStranger()) {
                     if (node.getSharedProperties().getService().getMessage().isCheckIfTargetActiveAndNotDeleted()) {
                         return isActiveAndNotDeleted(targetId)
                                 .flatMap(isActiveAndNotDeleted -> {
@@ -232,25 +232,18 @@ public class UserService {
         QueryOptions options = QueryOptions.newBuilder(2)
                 .include(User.Fields.PROFILE_ACCESS);
         return mongoClient.findOne(User.class, filter, options)
-                .flatMap(user -> {
-                    switch (user.getProfileAccess()) {
-                        case ALL:
-                            return Mono.just(ServicePermission.OK);
-                        case FRIENDS:
-                            return userRelationshipService.hasRelationshipAndNotBlocked(targetUserId, requesterId)
-                                    .map(isRelatedAndAllowed -> isRelatedAndAllowed
-                                            ? ServicePermission.OK
-                                            : ServicePermission.get(TurmsStatusCode.PROFILE_REQUESTER_NOT_IN_CONTACTS_OR_BLOCKED));
-                        case ALL_EXCEPT_BLOCKED_USERS:
-                            return userRelationshipService.hasNoRelationshipOrNotBlocked(targetUserId, requesterId)
-                                    .map(isNotBlocked -> isNotBlocked
-                                            ? ServicePermission.OK
-                                            : ServicePermission.get(TurmsStatusCode.PROFILE_REQUESTER_HAS_BEEN_BLOCKED));
-                        case UNRECOGNIZED:
-                        default:
-                            return Mono.error(TurmsBusinessException
-                                    .get(TurmsStatusCode.SERVER_INTERNAL_ERROR, "Unexpected value " + user.getProfileAccess()));
-                    }
+                .flatMap(user -> switch (user.getProfileAccess()) {
+                    case ALL -> Mono.just(ServicePermission.OK);
+                    case FRIENDS -> userRelationshipService.hasRelationshipAndNotBlocked(targetUserId, requesterId)
+                            .map(isRelatedAndAllowed -> isRelatedAndAllowed
+                                    ? ServicePermission.OK
+                                    : ServicePermission.get(TurmsStatusCode.PROFILE_REQUESTER_NOT_IN_CONTACTS_OR_BLOCKED));
+                    case ALL_EXCEPT_BLOCKED_USERS -> userRelationshipService.hasNoRelationshipOrNotBlocked(targetUserId, requesterId)
+                            .map(isNotBlocked -> isNotBlocked
+                                    ? ServicePermission.OK
+                                    : ServicePermission.get(TurmsStatusCode.PROFILE_REQUESTER_HAS_BEEN_BLOCKED));
+                    default -> Mono.error(TurmsBusinessException
+                            .get(TurmsStatusCode.SERVER_INTERNAL_ERROR, "Unexpected value " + user.getProfileAccess()));
                 })
                 .defaultIfEmpty(ServicePermission.get(TurmsStatusCode.USER_PROFILE_NOT_FOUND));
     }

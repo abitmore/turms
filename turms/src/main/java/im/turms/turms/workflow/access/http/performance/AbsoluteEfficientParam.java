@@ -6,7 +6,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *       http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package im.turms.turms.workflow.service.documentation;
+package im.turms.turms.workflow.access.http.performance;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -23,13 +23,9 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * If developers really need these features with efficient implementations,
- * they should implement the features according to their requirements and the solutions mentioned
- * in <a href="https://turms-im.github.io/docs/for-developers/schema.html">Schema Design</a>
- *
  * @author James Chen
  */
-@Retention(RetentionPolicy.SOURCE)
-@Target(ElementType.METHOD)
-public @interface UsesNonIndexedData {
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.PARAMETER)
+public @interface AbsoluteEfficientParam {
 }

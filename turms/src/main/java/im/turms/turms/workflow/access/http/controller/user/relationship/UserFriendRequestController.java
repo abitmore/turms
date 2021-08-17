@@ -27,6 +27,8 @@ import im.turms.server.common.bo.common.DateRange;
 import im.turms.turms.workflow.access.http.dto.model.UserFriendRequestDTO;
 import im.turms.turms.workflow.access.http.dto.request.user.AddFriendRequestDTO;
 import im.turms.turms.workflow.access.http.dto.request.user.UpdateFriendRequestDTO;
+import im.turms.turms.workflow.access.http.performance.AbsoluteEfficientParam;
+import im.turms.turms.workflow.access.http.performance.InefficientParam;
 import im.turms.turms.workflow.access.http.permission.RequiredPermission;
 import im.turms.turms.workflow.access.http.util.PageUtil;
 import im.turms.turms.workflow.service.impl.user.relationship.UserFriendRequestService;
@@ -86,16 +88,16 @@ public class UserFriendRequestController {
     @GetMapping
     @RequiredPermission(USER_FRIEND_REQUEST_QUERY)
     public Mono<ResponseEntity<ResponseDTO<Collection<UserFriendRequestDTO>>>> queryFriendRequests(
-            @RequestParam(required = false) Set<Long> ids,
-            @RequestParam(required = false) Set<Long> requesterIds,
+            @RequestParam(required = false) @AbsoluteEfficientParam Set<Long> ids,
+            @RequestParam(required = false) @InefficientParam Set<Long> requesterIds,
             @RequestParam(required = false) Set<Long> recipientIds,
-            @RequestParam(required = false) Set<RequestStatus> statuses,
-            @RequestParam(required = false) Date creationDateStart,
-            @RequestParam(required = false) Date creationDateEnd,
-            @RequestParam(required = false) Date responseDateStart,
-            @RequestParam(required = false) Date responseDateEnd,
-            @RequestParam(required = false) Date expirationDateStart,
-            @RequestParam(required = false) Date expirationDateEnd,
+            @RequestParam(required = false) @InefficientParam Set<RequestStatus> statuses,
+            @RequestParam(required = false) @InefficientParam(efficientWithAny = true) Date creationDateStart,
+            @RequestParam(required = false) @InefficientParam(efficientWithAny = true) Date creationDateEnd,
+            @RequestParam(required = false) @InefficientParam Date responseDateStart,
+            @RequestParam(required = false) @InefficientParam Date responseDateEnd,
+            @RequestParam(required = false) @InefficientParam Date expirationDateStart,
+            @RequestParam(required = false) @InefficientParam Date expirationDateEnd,
             @RequestParam(required = false) Integer size) {
         size = pageUtil.getSize(size);
         Flux<UserFriendRequestDTO> userFriendRequestFlux = userFriendRequestService.queryFriendRequests(

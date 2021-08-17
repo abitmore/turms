@@ -27,6 +27,8 @@ import im.turms.server.common.bo.common.DateRange;
 import im.turms.turms.workflow.access.http.dto.model.GroupInvitationDTO;
 import im.turms.turms.workflow.access.http.dto.request.group.AddGroupInvitationDTO;
 import im.turms.turms.workflow.access.http.dto.request.group.UpdateGroupInvitationDTO;
+import im.turms.turms.workflow.access.http.performance.AbsoluteEfficientParam;
+import im.turms.turms.workflow.access.http.performance.InefficientParam;
 import im.turms.turms.workflow.access.http.permission.RequiredPermission;
 import im.turms.turms.workflow.access.http.util.PageUtil;
 import im.turms.turms.workflow.service.impl.group.GroupInvitationService;
@@ -86,18 +88,18 @@ public class GroupInvitationController {
     @GetMapping
     @RequiredPermission(GROUP_INVITATION_QUERY)
     public Mono<ResponseEntity<ResponseDTO<Collection<GroupInvitationDTO>>>> queryGroupInvitations(
-            @RequestParam(required = false) Set<Long> ids,
+            @RequestParam(required = false) @AbsoluteEfficientParam Set<Long> ids,
             @RequestParam(required = false) Set<Long> groupIds,
-            @RequestParam(required = false) Set<Long> inviterIds,
+            @RequestParam(required = false) @InefficientParam(efficientWithAny = true) Set<Long> inviterIds,
             @RequestParam(required = false) Set<Long> inviteeIds,
-            @RequestParam(required = false) Set<RequestStatus> statuses,
+            @RequestParam(required = false) @InefficientParam Set<RequestStatus> statuses,
             @RequestParam(required = false) Date creationDateStart,
             @RequestParam(required = false) Date creationDateEnd,
             @RequestParam(required = false) Date responseDateStart,
             @RequestParam(required = false) Date responseDateEnd,
             @RequestParam(required = false) Date expirationDateStart,
             @RequestParam(required = false) Date expirationDateEnd,
-            @RequestParam(required = false) Integer size) {
+            @RequestParam(required = false) @InefficientParam(efficientWithAny = true) Integer size) {
         size = pageUtil.getSize(size);
         Flux<GroupInvitationDTO> invitationFlux = groupInvitationService.queryInvitations(
                         ids,

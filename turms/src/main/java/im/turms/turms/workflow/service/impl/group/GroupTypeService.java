@@ -95,20 +95,13 @@ public class GroupTypeService {
                     OperationType operationType = event.getOperationType();
                     GroupType groupType = event.getFullDocument();
                     switch (operationType) {
-                        case INSERT:
-                        case UPDATE:
-                        case REPLACE:
-                            groupTypeMap.put(groupType.getId(), groupType);
-                            break;
-                        case DELETE:
+                        case INSERT, UPDATE, REPLACE -> groupTypeMap.put(groupType.getId(), groupType);
+                        case DELETE -> {
                             long groupTypeId = ChangeStreamUtil.getIdAsLong(event.getDocumentKey());
                             groupTypeMap.remove(groupTypeId);
-                            break;
-                        case INVALIDATE:
-                            groupTypeMap.keySet().removeIf(id -> !id.equals(DaoConstant.DEFAULT_GROUP_TYPE_ID));
-                            break;
-                        default:
-                            log.fatal("Detect an illegal operation on GroupType collection: " + event);
+                        }
+                        case INVALIDATE -> groupTypeMap.keySet().removeIf(id -> !id.equals(DaoConstant.DEFAULT_GROUP_TYPE_ID));
+                        default -> log.fatal("Detect an illegal operation on GroupType collection: " + event);
                     }
                 })
                 .onErrorContinue(

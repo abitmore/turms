@@ -107,20 +107,13 @@ public class AdminService {
                 .doOnNext(event -> {
                     Admin admin = event.getFullDocument();
                     switch (event.getOperationType()) {
-                        case INSERT:
-                        case UPDATE:
-                        case REPLACE:
-                            adminMap.put(admin.getAccount(), new AdminInfo(admin, null));
-                            break;
-                        case DELETE:
+                        case INSERT, UPDATE, REPLACE -> adminMap.put(admin.getAccount(), new AdminInfo(admin, null));
+                        case DELETE -> {
                             String account = ChangeStreamUtil.getIdAsString(event.getDocumentKey());
                             adminMap.remove(account);
-                            break;
-                        case INVALIDATE:
-                            adminMap.clear();
-                            break;
-                        default:
-                            log.fatal("Detect an illegal operation on Admin collection: " + event);
+                        }
+                        case INVALIDATE -> adminMap.clear();
+                        default -> log.fatal("Detect an illegal operation on Admin collection: " + event);
                     }
                 })
                 .onErrorContinue((throwable, o) -> log.error("Error while processing the change stream event of Admin: {}", o, throwable))

@@ -36,6 +36,7 @@ import im.turms.server.common.mongo.operation.option.QueryOptions;
 import im.turms.server.common.mongo.operation.option.Update;
 import im.turms.server.common.property.TurmsPropertiesManager;
 import im.turms.server.common.util.AssertUtil;
+import im.turms.server.common.util.DateUtil;
 import im.turms.turms.bo.ServicePermission;
 import im.turms.turms.constant.OperationResultConstant;
 import im.turms.turms.constraint.ValidRequestStatus;
@@ -224,7 +225,7 @@ public class GroupInvitationService extends ExpirableModelService<GroupInvitatio
             return Mono.error(e);
         }
         if (!node.getSharedProperties()
-                .getService().getGroup().isAllowRecallingPendingGroupInvitationByOwnerAndManager()) {
+                .getService().getGroup().isAllowRecallPendingGroupInvitationByOwnerAndManager()) {
             return Mono.error(TurmsBusinessException.get(TurmsStatusCode.RECALLING_GROUP_INVITATION_IS_DISABLED));
         }
         return queryGroupIdAndStatus(invitationId)
@@ -306,29 +307,28 @@ public class GroupInvitationService extends ExpirableModelService<GroupInvitatio
                 : userVersionService.queryReceivedGroupInvitationsLastUpdatedDate(userId);
         return versionMono
                 .flatMap(version -> {
-                    if (lastUpdatedDate == null || lastUpdatedDate.before(version)) {
-                        Flux<GroupInvitation> invitationFlux = areSentByUser
-                                ? queryGroupInvitationsByInviterId(userId)
-                                : queryGroupInvitationsByInviteeId(userId);
-                        return invitationFlux
-                                .collectList()
-                                .map(groupInvitations -> {
-                                    if (groupInvitations.isEmpty()) {
-                                        throw TurmsBusinessException.get(TurmsStatusCode.NO_CONTENT);
-                                    }
-                                    GroupInvitationsWithVersion.Builder builder = GroupInvitationsWithVersion.newBuilder();
-                                    int expireAfterSeconds = getModelExpireAfterSeconds();
-                                    for (GroupInvitation groupInvitation : groupInvitations) {
-                                        var invitation = ProtoModelUtil.groupInvitation2proto(groupInvitation, expireAfterSeconds);
-                                        builder.addGroupInvitations(invitation);
-                                    }
-                                    return builder
-                                            .setLastUpdatedDate(version.getTime())
-                                            .build();
-                                });
-                    } else {
+                    if (DateUtil.isAfterOrSame(lastUpdatedDate, version)) {
                         return Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE));
                     }
+                    Flux<GroupInvitation> invitationFlux = areSentByUser
+                            ? queryGroupInvitationsByInviterId(userId)
+                            : queryGroupInvitationsByInviteeId(userId);
+                    return invitationFlux
+                            .collectList()
+                            .map(groupInvitations -> {
+                                if (groupInvitations.isEmpty()) {
+                                    throw TurmsBusinessException.get(TurmsStatusCode.NO_CONTENT);
+                                }
+                                GroupInvitationsWithVersion.Builder builder = GroupInvitationsWithVersion.newBuilder();
+                                int expireAfterSeconds = getModelExpireAfterSeconds();
+                                for (GroupInvitation groupInvitation : groupInvitations) {
+                                    var invitation = ProtoModelUtil.groupInvitation2proto(groupInvitation, expireAfterSeconds);
+                                    builder.addGroupInvitations(invitation);
+                                }
+                                return builder
+                                        .setLastUpdatedDate(version.getTime())
+                                        .build();
+                            });
                 })
                 .switchIfEmpty(Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE)));
     }
@@ -350,25 +350,24 @@ public class GroupInvitationService extends ExpirableModelService<GroupInvitatio
                     }
                     return groupVersionService.queryGroupInvitationsVersion(groupId)
                             .flatMap(version -> {
-                                if (lastUpdatedDate == null || lastUpdatedDate.before(version)) {
-                                    return queryGroupInvitationsByGroupId(groupId)
-                                            .collect(Collectors.toSet())
-                                            .map(groupInvitations -> {
-                                                if (groupInvitations.isEmpty()) {
-                                                    throw TurmsBusinessException.get(TurmsStatusCode.NO_CONTENT);
-                                                }
-                                                GroupInvitationsWithVersion.Builder builder = GroupInvitationsWithVersion.newBuilder()
-                                                        .setLastUpdatedDate(version.getTime());
-                                                int expireAfterSeconds = getModelExpireAfterSeconds();
-                                                for (GroupInvitation invitation : groupInvitations) {
-                                                    builder.addGroupInvitations(
-                                                            ProtoModelUtil.groupInvitation2proto(invitation, expireAfterSeconds).build());
-                                                }
-                                                return builder.build();
-                                            });
-                                } else {
+                                if (DateUtil.isAfterOrSame(lastUpdatedDate, version)) {
                                     return Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE));
                                 }
+                                return queryGroupInvitationsByGroupId(groupId)
+                                        .collect(Collectors.toSet())
+                                        .map(groupInvitations -> {
+                                            if (groupInvitations.isEmpty()) {
+                                                throw TurmsBusinessException.get(TurmsStatusCode.NO_CONTENT);
+                                            }
+                                            GroupInvitationsWithVersion.Builder builder = GroupInvitationsWithVersion.newBuilder()
+                                                    .setLastUpdatedDate(version.getTime());
+                                            int expireAfterSeconds = getModelExpireAfterSeconds();
+                                            for (GroupInvitation invitation : groupInvitations) {
+                                                builder.addGroupInvitations(
+                                                        ProtoModelUtil.groupInvitation2proto(invitation, expireAfterSeconds).build());
+                                            }
+                                            return builder.build();
+                                        });
                             })
                             .switchIfEmpty(Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE)));
                 });

@@ -26,6 +26,7 @@ import im.turms.server.common.bo.common.DateRange;
 import im.turms.server.common.util.CollectionUtil;
 import im.turms.turms.workflow.access.http.dto.request.group.AddGroupBlockedUserDTO;
 import im.turms.turms.workflow.access.http.dto.request.group.UpdateGroupBlockedUserDTO;
+import im.turms.turms.workflow.access.http.performance.InefficientParam;
 import im.turms.turms.workflow.access.http.permission.RequiredPermission;
 import im.turms.turms.workflow.access.http.util.PageUtil;
 import im.turms.turms.workflow.dao.domain.group.GroupBlockedUser;
@@ -82,11 +83,11 @@ public class GroupBlocklistController {
     @RequiredPermission(GROUP_BLOCKLIST_QUERY)
     public Mono<ResponseEntity<ResponseDTO<Collection<GroupBlockedUser>>>> queryGroupBlockedUsers(
             @RequestParam(required = false) Set<Long> groupIds,
-            @RequestParam(required = false) Set<Long> userIds,
-            @RequestParam(required = false) Date blockDateStart,
-            @RequestParam(required = false) Date blockDateEnd,
-            @RequestParam(required = false) Set<Long> requesterIds,
-            @RequestParam(required = false) Integer size) {
+            @RequestParam(required = false) @InefficientParam(absoluteEfficientWith = "groupIds") Set<Long> userIds,
+            @RequestParam(required = false) @InefficientParam Date blockDateStart,
+            @RequestParam(required = false) @InefficientParam Date blockDateEnd,
+            @RequestParam(required = false) @InefficientParam Set<Long> requesterIds,
+            @RequestParam(required = false) @InefficientParam(efficientWithAny = true) Integer size) {
         size = pageUtil.getSize(size);
         Flux<GroupBlockedUser> userFlux = groupBlocklistService.queryBlockedUsers(
                 groupIds,
@@ -102,12 +103,12 @@ public class GroupBlocklistController {
     @RequiredPermission(GROUP_BLOCKLIST_QUERY)
     public Mono<ResponseEntity<ResponseDTO<PaginationDTO<GroupBlockedUser>>>> queryGroupBlockedUsers(
             @RequestParam(required = false) Set<Long> groupIds,
-            @RequestParam(required = false) Set<Long> userIds,
-            @RequestParam(required = false) Date blockDateStart,
-            @RequestParam(required = false) Date blockDateEnd,
-            @RequestParam(required = false) Set<Long> requesterIds,
-            @RequestParam(defaultValue = "0") Integer page,
-            @RequestParam(required = false) Integer size) {
+            @RequestParam(required = false) @InefficientParam(absoluteEfficientWith = "groupIds") Set<Long> userIds,
+            @RequestParam(required = false) @InefficientParam Date blockDateStart,
+            @RequestParam(required = false) @InefficientParam Date blockDateEnd,
+            @RequestParam(required = false) @InefficientParam Set<Long> requesterIds,
+            @RequestParam(defaultValue = "0") @InefficientParam(efficientWithAny = true) Integer page,
+            @RequestParam(required = false) @InefficientParam(efficientWithAny = true) Integer size) {
         size = pageUtil.getSize(size);
         Mono<Long> count = groupBlocklistService.countBlockedUsers(groupIds,
                 userIds,

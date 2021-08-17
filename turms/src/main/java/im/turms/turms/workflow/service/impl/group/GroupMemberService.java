@@ -37,6 +37,7 @@ import im.turms.server.common.mongo.operation.option.Update;
 import im.turms.server.common.service.session.UserStatusService;
 import im.turms.server.common.util.AssertUtil;
 import im.turms.server.common.util.CollectionUtil;
+import im.turms.server.common.util.DateUtil;
 import im.turms.turms.bo.ServicePermission;
 import im.turms.turms.constant.DaoConstant;
 import im.turms.turms.constant.OperationResultConstant;
@@ -512,7 +513,7 @@ public class GroupMemberService {
                 .defaultIfEmpty(false);
     }
 
-    public Flux<Long> queryUsersJoinedGroupsIds(
+    public Flux<Long> queryUsersJoinedGroupIds(
             @NotEmpty Set<Long> userIds,
             @Nullable Integer page,
             @Nullable Integer size) {
@@ -536,11 +537,11 @@ public class GroupMemberService {
         } catch (TurmsBusinessException e) {
             return Mono.error(e);
         }
-        return queryUsersJoinedGroupsIds(userIds, null, null)
+        return queryUsersJoinedGroupIds(userIds, null, null)
                 .collect(Collectors.toSet())
-                .flatMap(groupsIds -> groupsIds.isEmpty()
+                .flatMap(groupIds -> groupIds.isEmpty()
                         ? Mono.just(Collections.emptySet())
-                        : queryGroupMemberIds(groupsIds).collect(Collectors.toSet()));
+                        : queryGroupMemberIds(groupIds).collect(Collectors.toSet()));
     }
 
     public Flux<Long> queryGroupMemberIds(@NotNull Long groupId) {
@@ -685,30 +686,29 @@ public class GroupMemberService {
                         ? groupVersionService.queryMembersVersion(groupId)
                         : Mono.error(TurmsBusinessException.get(TurmsStatusCode.NOT_MEMBER_TO_QUERY_MEMBER_INFO)))
                 .flatMap(version -> {
-                    if (lastUpdatedDate == null || lastUpdatedDate.before(version)) {
-                        return queryGroupsMembers(Set.of(groupId), null, null, null, null, null, null)
-                                .collectList()
-                                .flatMap(members -> {
-                                    if (members.isEmpty()) {
-                                        return Mono.error(TurmsBusinessException.get(TurmsStatusCode.NO_CONTENT));
-                                    }
-                                    GroupMembersWithVersion.Builder builder = GroupMembersWithVersion.newBuilder();
-                                    if (withStatus) {
-                                        return fillMembersBuilderWithStatus(members, builder);
-                                    } else {
-                                        for (GroupMember member : members) {
-                                            im.turms.common.model.bo.group.GroupMember groupMember = ProtoModelUtil
-                                                    .groupMember2proto(member).build();
-                                            builder.addGroupMembers(groupMember);
-                                        }
-                                        return Mono.just(builder
-                                                .setLastUpdatedDate(version.getTime())
-                                                .build());
-                                    }
-                                });
-                    } else {
+                    if (DateUtil.isAfterOrSame(lastUpdatedDate, version)) {
                         return Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE));
                     }
+                    return queryGroupsMembers(Set.of(groupId), null, null, null, null, null, null)
+                            .collectList()
+                            .flatMap(members -> {
+                                if (members.isEmpty()) {
+                                    return Mono.error(TurmsBusinessException.get(TurmsStatusCode.NO_CONTENT));
+                                }
+                                GroupMembersWithVersion.Builder builder = GroupMembersWithVersion.newBuilder();
+                                if (withStatus) {
+                                    return fillMembersBuilderWithStatus(members, builder);
+                                } else {
+                                    for (GroupMember member : members) {
+                                        im.turms.common.model.bo.group.GroupMember groupMember = ProtoModelUtil
+                                                .groupMember2proto(member).build();
+                                        builder.addGroupMembers(groupMember);
+                                    }
+                                    return Mono.just(builder
+                                            .setLastUpdatedDate(version.getTime())
+                                            .build());
+                                }
+                            });
                 })
                 .switchIfEmpty(Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE)));
     }
@@ -803,32 +803,21 @@ public class GroupMemberService {
     private TurmsStatusCode isAllowedToInviteUserWithSpecifiedRole(@NotNull GroupMemberRole requesterRole,
                                                                    @Nullable GroupMemberRole newMemberRole,
                                                                    @NotNull GroupInvitationStrategy groupInvitationStrategy) {
-        TurmsStatusCode isAllowToAddRole;
-        switch (groupInvitationStrategy) {
-            case OWNER:
-            case OWNER_REQUIRING_APPROVAL:
-                isAllowToAddRole = requesterRole == GroupMemberRole.OWNER
-                        ? TurmsStatusCode.OK
-                        : TurmsStatusCode.NOT_OWNER_TO_SEND_INVITATION;
-                break;
-            case OWNER_MANAGER:
-            case OWNER_MANAGER_REQUIRING_APPROVAL:
-                isAllowToAddRole = requesterRole == GroupMemberRole.OWNER
-                        || requesterRole == GroupMemberRole.MANAGER
-                        ? TurmsStatusCode.OK
-                        : TurmsStatusCode.NOT_OWNER_OR_MANAGER_TO_SEND_INVITATION;
-                break;
-            case OWNER_MANAGER_MEMBER:
-            case OWNER_MANAGER_MEMBER_REQUIRING_APPROVAL:
-                isAllowToAddRole = requesterRole == GroupMemberRole.OWNER
-                        || requesterRole == GroupMemberRole.MANAGER
-                        || requesterRole == GroupMemberRole.MEMBER
-                        ? TurmsStatusCode.OK
-                        : TurmsStatusCode.NOT_MEMBER_TO_SEND_INVITATION;
-                break;
-            default:
-                isAllowToAddRole = TurmsStatusCode.OK;
-        }
+        TurmsStatusCode isAllowToAddRole = switch (groupInvitationStrategy) {
+            case OWNER, OWNER_REQUIRING_APPROVAL -> requesterRole == GroupMemberRole.OWNER
+                    ? TurmsStatusCode.OK
+                    : TurmsStatusCode.NOT_OWNER_TO_SEND_INVITATION;
+            case OWNER_MANAGER, OWNER_MANAGER_REQUIRING_APPROVAL -> requesterRole == GroupMemberRole.OWNER
+                    || requesterRole == GroupMemberRole.MANAGER
+                    ? TurmsStatusCode.OK
+                    : TurmsStatusCode.NOT_OWNER_OR_MANAGER_TO_SEND_INVITATION;
+            case OWNER_MANAGER_MEMBER, OWNER_MANAGER_MEMBER_REQUIRING_APPROVAL -> requesterRole == GroupMemberRole.OWNER
+                    || requesterRole == GroupMemberRole.MANAGER
+                    || requesterRole == GroupMemberRole.MEMBER
+                    ? TurmsStatusCode.OK
+                    : TurmsStatusCode.NOT_MEMBER_TO_SEND_INVITATION;
+            default -> TurmsStatusCode.OK;
+        };
         if (isAllowToAddRole == TurmsStatusCode.OK) {
             boolean isRequesterRoleHigherThanNewMemberRole = newMemberRole == null
                     || requesterRole.getNumber() < newMemberRole.getNumber();

@@ -87,20 +87,13 @@ public class UserPermissionGroupService {
                     OperationType operationType = event.getOperationType();
                     UserPermissionGroup userPermissionGroup = event.getFullDocument();
                     switch (operationType) {
-                        case INSERT:
-                        case UPDATE:
-                        case REPLACE:
-                            userPermissionGroupMap.put(userPermissionGroup.getId(), userPermissionGroup);
-                            break;
-                        case DELETE:
+                        case INSERT, UPDATE, REPLACE -> userPermissionGroupMap.put(userPermissionGroup.getId(), userPermissionGroup);
+                        case DELETE -> {
                             long groupTypeId = ChangeStreamUtil.getIdAsLong(event.getDocumentKey());
                             userPermissionGroupMap.remove(groupTypeId);
-                            break;
-                        case INVALIDATE:
-                            userPermissionGroupMap.clear();
-                            break;
-                        default:
-                            log.fatal("Detect an illegal operation on UserPermissionGroup collection: " + event);
+                        }
+                        case INVALIDATE -> userPermissionGroupMap.clear();
+                        default -> log.fatal("Detect an illegal operation on UserPermissionGroup collection: " + event);
                     }
                 })
                 .onErrorContinue((throwable, o) -> log

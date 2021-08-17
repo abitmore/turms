@@ -28,6 +28,7 @@ import im.turms.turms.constant.DivideBy;
 import im.turms.turms.workflow.access.http.dto.request.user.AddUserDTO;
 import im.turms.turms.workflow.access.http.dto.request.user.UpdateUserDTO;
 import im.turms.turms.workflow.access.http.dto.request.user.UserStatisticsDTO;
+import im.turms.turms.workflow.access.http.performance.InefficientParam;
 import im.turms.turms.workflow.access.http.permission.RequiredPermission;
 import im.turms.turms.workflow.access.http.util.DateTimeUtil;
 import im.turms.turms.workflow.access.http.util.PageUtil;
@@ -94,11 +95,11 @@ public class UserController {
     @RequiredPermission(USER_QUERY)
     public Mono<ResponseEntity<ResponseDTO<Collection<User>>>> queryUsers(
             @RequestParam(required = false) Set<Long> ids,
-            @RequestParam(required = false) Date registrationDateStart,
-            @RequestParam(required = false) Date registrationDateEnd,
-            @RequestParam(required = false) Date deletionDateStart,
-            @RequestParam(required = false) Date deletionDateEnd,
-            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(required = false) @InefficientParam Date registrationDateStart,
+            @RequestParam(required = false) @InefficientParam Date registrationDateEnd,
+            @RequestParam(required = false) @InefficientParam Date deletionDateStart,
+            @RequestParam(required = false) @InefficientParam Date deletionDateEnd,
+            @RequestParam(required = false) @InefficientParam Boolean isActive,
             @RequestParam(required = false) Integer size) {
         size = pageUtil.getSize(size);
         Flux<User> usersFlux = userService.queryUsers(
@@ -116,11 +117,11 @@ public class UserController {
     @RequiredPermission(USER_QUERY)
     public Mono<ResponseEntity<ResponseDTO<PaginationDTO<User>>>> queryUsers(
             @RequestParam(required = false) Set<Long> ids,
-            @RequestParam(required = false) Date registrationDateStart,
-            @RequestParam(required = false) Date registrationDateEnd,
-            @RequestParam(required = false) Date deletionDateStart,
-            @RequestParam(required = false) Date deletionDateEnd,
-            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(required = false) @InefficientParam Date registrationDateStart,
+            @RequestParam(required = false) @InefficientParam Date registrationDateEnd,
+            @RequestParam(required = false) @InefficientParam Date deletionDateStart,
+            @RequestParam(required = false) @InefficientParam Date deletionDateEnd,
+            @RequestParam(required = false) @InefficientParam Boolean isActive,
             @RequestParam(defaultValue = "0") Integer page,
             @RequestParam(required = false) Integer size) {
         size = pageUtil.getSize(size);
@@ -143,12 +144,12 @@ public class UserController {
     @GetMapping("/count")
     @RequiredPermission(USER_QUERY)
     public Mono<ResponseEntity<ResponseDTO<UserStatisticsDTO>>> countUsers(
-            @RequestParam(required = false) Date registeredStartDate,
-            @RequestParam(required = false) Date registeredEndDate,
-            @RequestParam(required = false) Date deletedStartDate,
-            @RequestParam(required = false) Date deletedEndDate,
-            @RequestParam(required = false) Date sentMessageStartDate,
-            @RequestParam(required = false) Date sentMessageEndDate,
+            @RequestParam(required = false) @InefficientParam Date registeredStartDate,
+            @RequestParam(required = false) @InefficientParam Date registeredEndDate,
+            @RequestParam(required = false) @InefficientParam Date deletedStartDate,
+            @RequestParam(required = false) @InefficientParam Date deletedEndDate,
+            @RequestParam(required = false) @InefficientParam Date sentMessageStartDate,
+            @RequestParam(required = false) @InefficientParam Date sentMessageEndDate,
             @RequestParam(defaultValue = "NOOP") DivideBy divideBy) {
         List<Mono<?>> counts = new LinkedList<>();
         UserStatisticsDTO statistics = new UserStatisticsDTO();

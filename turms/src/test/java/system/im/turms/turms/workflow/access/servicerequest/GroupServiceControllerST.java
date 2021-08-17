@@ -328,13 +328,13 @@ class GroupServiceControllerST extends BaseServiceControllerTest<GroupServiceCon
 
     @Test
     @Order(ORDER_MIDDLE_PRIORITY)
-    void handleQueryJoinedGroupsIdsRequest_queryJoinedGroupIds_shouldEqualNewGroupId() {
+    void handleQueryJoinedGroupIdsRequest_queryJoinedGroupIds_shouldEqualNewGroupId() {
         TurmsRequest request = TurmsRequest.newBuilder()
                 .setQueryJoinedGroupIdsRequest(QueryJoinedGroupIdsRequest.newBuilder()
                         .setLastUpdatedDate(0))
                 .build();
         ClientRequest clientRequest = new ClientRequest(USER_ID, USER_DEVICE, REQUEST_ID, request);
-        Mono<RequestHandlerResult> resultMono = getController().handleQueryJoinedGroupsIdsRequest()
+        Mono<RequestHandlerResult> resultMono = getController().handleQueryJoinedGroupIdsRequest()
                 .handle(clientRequest);
         assertResultIsOk(resultMono, result -> assertThat(result.getDataForRequester().getIdsWithVersion().getValuesList())
                 .contains(groupId));

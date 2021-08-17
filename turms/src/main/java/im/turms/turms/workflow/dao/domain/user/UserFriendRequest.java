@@ -36,7 +36,7 @@ import java.util.Date;
  * The first field is used to query requests according to the recipient ID;
  * The second field is used to limit the date range of data because of the ever-growing collection,
  * especially for the scenario that a user queries his/her requests by the creation date;
- * The third field is used to check if there already a request when creating a request.
+ * The third field is used to check if there is already a request when creating a request.
  */
 @Data
 @AllArgsConstructor

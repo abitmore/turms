@@ -35,6 +35,7 @@ import im.turms.server.common.mongo.operation.option.QueryOptions;
 import im.turms.server.common.mongo.operation.option.Update;
 import im.turms.server.common.property.TurmsPropertiesManager;
 import im.turms.server.common.util.AssertUtil;
+import im.turms.server.common.util.DateUtil;
 import im.turms.turms.constant.DaoConstant;
 import im.turms.turms.constant.OperationResultConstant;
 import im.turms.turms.constraint.ValidRequestStatus;
@@ -181,7 +182,7 @@ public class GroupJoinRequestService extends ExpirableModelService<GroupJoinRequ
         } catch (TurmsBusinessException e) {
             return Mono.error(e);
         }
-        if (!node.getSharedProperties().getService().getGroup().isAllowRecallingJoinRequestSentByOneself()) {
+        if (!node.getSharedProperties().getService().getGroup().isAllowRecallJoinRequestSentByOneself()) {
             return Mono.error(TurmsBusinessException.get(TurmsStatusCode.RECALLING_GROUP_JOIN_REQUEST_IS_DISABLED));
         }
         return queryRequesterIdAndStatusAndGroupId(requestId)
@@ -221,7 +222,7 @@ public class GroupJoinRequestService extends ExpirableModelService<GroupJoinRequ
         Mono<Date> versionMono = searchRequestsByGroupId ?
                 groupMemberService.isOwnerOrManager(requesterId, groupId)
                         .flatMap(authenticated -> {
-                            if (authenticated != null && authenticated) {
+                            if (Boolean.TRUE.equals(authenticated)) {
                                 return groupVersionService.queryGroupJoinRequestsVersion(groupId);
                             }
                             return Mono.error(TurmsBusinessException.get(TurmsStatusCode.NOT_OWNER_OR_MANAGER_TO_ACCESS_GROUP_REQUEST));
@@ -229,29 +230,28 @@ public class GroupJoinRequestService extends ExpirableModelService<GroupJoinRequ
                 : userVersionService.queryGroupJoinRequestsVersion(requesterId);
         return versionMono
                 .flatMap(version -> {
-                    if (lastUpdatedDate == null || lastUpdatedDate.before(version)) {
-                        Flux<GroupJoinRequest> requestFlux = searchRequestsByGroupId
-                                ? queryGroupJoinRequestsByGroupId(groupId)
-                                : queryGroupJoinRequestsByRequesterId(requesterId);
-                        return requestFlux
-                                .collectList()
-                                .map(groupJoinRequests -> {
-                                    if (groupJoinRequests.isEmpty()) {
-                                        throw TurmsBusinessException.get(TurmsStatusCode.NO_CONTENT);
-                                    }
-                                    GroupJoinRequestsWithVersion.Builder builder = GroupJoinRequestsWithVersion.newBuilder();
-                                    int expireAfterSeconds = getModelExpireAfterSeconds();
-                                    for (GroupJoinRequest groupJoinRequest : groupJoinRequests) {
-                                        builder.addGroupJoinRequests(
-                                                ProtoModelUtil.groupJoinRequest2proto(groupJoinRequest, expireAfterSeconds).build());
-                                    }
-                                    return builder
-                                            .setLastUpdatedDate(version.getTime())
-                                            .build();
-                                });
-                    } else {
+                    if (DateUtil.isAfterOrSame(lastUpdatedDate, version)) {
                         return Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE));
                     }
+                    Flux<GroupJoinRequest> requestFlux = searchRequestsByGroupId
+                            ? queryGroupJoinRequestsByGroupId(groupId)
+                            : queryGroupJoinRequestsByRequesterId(requesterId);
+                    return requestFlux
+                            .collectList()
+                            .map(groupJoinRequests -> {
+                                if (groupJoinRequests.isEmpty()) {
+                                    throw TurmsBusinessException.get(TurmsStatusCode.NO_CONTENT);
+                                }
+                                GroupJoinRequestsWithVersion.Builder builder = GroupJoinRequestsWithVersion.newBuilder();
+                                int expireAfterSeconds = getModelExpireAfterSeconds();
+                                for (GroupJoinRequest groupJoinRequest : groupJoinRequests) {
+                                    builder.addGroupJoinRequests(
+                                            ProtoModelUtil.groupJoinRequest2proto(groupJoinRequest, expireAfterSeconds).build());
+                                }
+                                return builder
+                                        .setLastUpdatedDate(version.getTime())
+                                        .build();
+                            });
                 })
                 .switchIfEmpty(Mono.error(TurmsBusinessException.get(TurmsStatusCode.ALREADY_UP_TO_DATE)));
     }

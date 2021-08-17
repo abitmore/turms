@@ -20,6 +20,7 @@ package im.turms.turms.workflow.dao.domain.group;
 import im.turms.common.constant.GroupMemberRole;
 import im.turms.server.common.mongo.entity.IndexType;
 import im.turms.server.common.mongo.entity.ShardingStrategy;
+import im.turms.server.common.mongo.entity.annotation.CompoundIndex;
 import im.turms.server.common.mongo.entity.annotation.Document;
 import im.turms.server.common.mongo.entity.annotation.Field;
 import im.turms.server.common.mongo.entity.annotation.Id;
@@ -38,9 +39,12 @@ import java.util.List;
 
 /**
  * @author James Chen
+ * @implNote Use compound index because it is frequently used by
+ * isMemberMuted and queryGroupMemberRole
  */
-@Data
 @AllArgsConstructor(onConstructor = @__(@PersistenceConstructor))
+@CompoundIndex({GroupMember.Fields.ID_GROUP_ID, GroupMember.Fields.ID_USER_ID})
+@Data
 @Document(GroupMember.COLLECTION_NAME)
 @Sharded(shardKey = GroupMember.Fields.ID_GROUP_ID, shardingStrategy = ShardingStrategy.HASH)
 public final class GroupMember {
@@ -84,10 +88,13 @@ public final class GroupMember {
     public static final class Key {
 
         @Field(Fields.GROUP_ID)
-        @Indexed(IndexType.HASH)
         private Long groupId;
 
+        /**
+         * Used by queryUsersJoinedGroupIds
+         */
         @Field(Fields.USER_ID)
+        @Indexed(IndexType.HASH)
         private Long userId;
 
         public static final class Fields {
