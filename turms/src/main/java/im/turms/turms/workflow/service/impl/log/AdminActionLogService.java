@@ -29,6 +29,7 @@ import im.turms.turms.plugin.manager.TurmsPluginManager;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Service;
+import org.springframework.util.MultiValueMap;
 import reactor.core.publisher.Mono;
 
 import javax.annotation.Nullable;
@@ -63,11 +64,11 @@ public class AdminActionLogService {
             @NotNull @PastOrPresent Date timestamp,
             @NotNull @ValidIpAddress String ip,
             @NotNull @NoWhitespace String action,
-            @Nullable DBObject params,
+            @Nullable MultiValueMap<String, String> params,
             @Nullable DBObject body) {
-        boolean logAdminAction = node.getSharedProperties().getService().getLog().isLogAdminAction();
+        boolean isLogEnabled = node.getSharedProperties().getService().getAdminApi().getLog().isEnabled();
         boolean triggerHandlers = turmsPluginManager.isEnabled() && !turmsPluginManager.getAdminActionHandlerList().isEmpty();
-        if (logAdminAction || triggerHandlers) {
+        if (isLogEnabled || triggerHandlers) {
             AdminAction adminAction = new AdminAction(
                     account,
                     timestamp,
@@ -90,7 +91,7 @@ public class AdminActionLogService {
                     }
                 }
             }
-            if (logAdminAction) {
+            if (isLogEnabled) {
                 AdminApiLogging.log(adminAction);
             }
         }

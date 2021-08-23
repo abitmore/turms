@@ -559,26 +559,6 @@ public class MessageService {
                 Message.Fields.TARGET_ID);
     }
 
-//    public Mono<Long> countUsersWhoAcknowledgedMessage(
-//            @Nullable DateRange dateRange,
-//            @Nullable Boolean areGroupMessage) {
-//        Criteria criteria = QueryBuilder.newBuilder()
-//                .addBetweenIfNotNull(MessageStatus.Fields.RECEPTION_DATE, dateRange)
-//                .buildCriteria();
-//        if (areGroupMessage != null) {
-//            if (areGroupMessage) {
-//                criteria.and(MessageStatus.Fields.GROUP_ID).ne(null);
-//            } else {
-//                criteria.and(MessageStatus.Fields.GROUP_ID).is(null);
-//            }
-//        }
-//        return AggregationUtil.countDistinct(
-//                mongoTemplate,
-//                criteria,
-//                MessageStatus.Fields.ID_RECIPIENT_ID,
-//                MessageStatus.class);
-//    }
-
     public Mono<Long> countSentMessages(
             @Nullable DateRange dateRange,
             @Nullable Boolean areGroupMessages,
@@ -606,41 +586,6 @@ public class MessageService {
                     }
                 });
     }
-
-//    public Mono<Long> countAcknowledgedMessages(
-//            @Nullable DateRange dateRange,
-//            @Nullable Boolean areGroupMessages,
-//            @Nullable Boolean areSystemMessages) {
-//        Query query = QueryBuilder.newBuilder()
-//                .addBetweenIfNotNull(MessageStatus.Fields.RECEPTION_DATE, dateRange)
-//                .addIsIfNotNull(MessageStatus.Fields.IS_SYSTEM_MESSAGE, areSystemMessages)
-//                .buildQuery();
-//        if (areGroupMessages != null) {
-//            if (areGroupMessages) {
-//                query.addCriteria(Criteria.where(MessageStatus.Fields.GROUP_ID).ne(null));
-//            } else {
-//                query.addCriteria(Criteria.where(MessageStatus.Fields.GROUP_ID).is(null));
-//            }
-//        }
-//        return mongoTemplate.count(query, MessageStatus.class, MessageStatus.COLLECTION_NAME);
-//    }
-
-//    public Mono<Long> countAcknowledgedMessagesOnAverage(
-//            @Nullable DateRange dateRange,
-//            @Nullable Boolean areGroupMessages,
-//            @Nullable Boolean areSystemMessages) {
-//        return countAcknowledgedMessages(dateRange, areGroupMessages, areSystemMessages)
-//                .flatMap(totalAcknowledgedMessages -> {
-//                    if (totalAcknowledgedMessages == 0) {
-//                        return Mono.just(0L);
-//                    } else {
-//                        return countUsersWhoAcknowledgedMessage(dateRange, areGroupMessages)
-//                                .map(totalUsers -> totalUsers == 0
-//                                        ? Long.MAX_VALUE
-//                                        : totalAcknowledgedMessages / totalUsers);
-//                    }
-//                });
-//    }
 
     public Mono<UpdateResult> authAndUpdateMessage(
             @NotNull Long requesterId,

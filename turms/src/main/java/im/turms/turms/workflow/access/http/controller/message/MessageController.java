@@ -27,6 +27,8 @@ import im.turms.turms.constant.DivideBy;
 import im.turms.turms.workflow.access.http.dto.request.message.CreateMessageDTO;
 import im.turms.turms.workflow.access.http.dto.request.message.MessageStatisticsDTO;
 import im.turms.turms.workflow.access.http.dto.request.message.UpdateMessageDTO;
+import im.turms.turms.workflow.access.http.performance.AbsoluteEfficientParam;
+import im.turms.turms.workflow.access.http.performance.InefficientParam;
 import im.turms.turms.workflow.access.http.permission.RequiredPermission;
 import im.turms.turms.workflow.access.http.util.DateTimeUtil;
 import im.turms.turms.workflow.access.http.util.PageUtil;
@@ -94,16 +96,16 @@ public class MessageController {
     @GetMapping
     @RequiredPermission(MESSAGE_QUERY)
     public Mono<ResponseEntity<ResponseDTO<Collection<Message>>>> queryMessages(
-            @RequestParam(required = false) Set<Long> ids,
-            @RequestParam(required = false) Boolean areGroupMessages,
-            @RequestParam(required = false) Boolean areSystemMessages,
-            @RequestParam(required = false) Set<Long> senderIds,
+            @RequestParam(required = false) @AbsoluteEfficientParam Set<Long> ids,
+            @RequestParam(required = false) @InefficientParam Boolean areGroupMessages,
+            @RequestParam(required = false) @InefficientParam Boolean areSystemMessages,
+            @RequestParam(required = false) @InefficientParam Set<Long> senderIds,
             @RequestParam(required = false) Set<Long> targetIds,
             @RequestParam(required = false) Date deliveryDateStart,
             @RequestParam(required = false) Date deliveryDateEnd,
             @RequestParam(required = false) Date deletionDateStart,
             @RequestParam(required = false) Date deletionDateEnd,
-            @RequestParam(required = false) Integer size) {
+            @RequestParam(required = false) @InefficientParam(efficientWithAny = true) Integer size) {
         Flux<Message> completeMessagesFlux = messageService.queryMessages(
                 false,
                 ids,
@@ -121,17 +123,17 @@ public class MessageController {
     @GetMapping("/page")
     @RequiredPermission(MESSAGE_QUERY)
     public Mono<ResponseEntity<ResponseDTO<PaginationDTO<Message>>>> queryMessages(
-            @RequestParam(required = false) Set<Long> ids,
-            @RequestParam(required = false) Boolean areGroupMessages,
-            @RequestParam(required = false) Boolean areSystemMessages,
-            @RequestParam(required = false) Set<Long> senderIds,
+            @RequestParam(required = false) @AbsoluteEfficientParam Set<Long> ids,
+            @RequestParam(required = false) @InefficientParam Boolean areGroupMessages,
+            @RequestParam(required = false) @InefficientParam Boolean areSystemMessages,
+            @RequestParam(required = false) @InefficientParam Set<Long> senderIds,
             @RequestParam(required = false) Set<Long> targetIds,
             @RequestParam(required = false) Date deliveryDateStart,
             @RequestParam(required = false) Date deliveryDateEnd,
             @RequestParam(required = false) Date deletionDateStart,
             @RequestParam(required = false) Date deletionDateEnd,
-            @RequestParam(defaultValue = "0") Integer page,
-            @RequestParam(required = false) Integer size) {
+            @RequestParam(defaultValue = "0") @InefficientParam(efficientWithAny = true) Integer page,
+            @RequestParam(required = false) @InefficientParam(efficientWithAny = true) Integer size) {
         Mono<Long> count = messageService.countMessages(
                 ids,
                 areGroupMessages,
@@ -157,16 +159,12 @@ public class MessageController {
     @GetMapping("/count")
     @RequiredPermission(MESSAGE_QUERY)
     public Mono<ResponseEntity<ResponseDTO<MessageStatisticsDTO>>> countMessages(
-            @RequestParam(required = false) Boolean areGroupMessages,
-            @RequestParam(required = false) Boolean areSystemMessages,
+            @RequestParam(required = false) @InefficientParam Boolean areGroupMessages,
+            @RequestParam(required = false) @InefficientParam Boolean areSystemMessages,
             @RequestParam(required = false) Date sentStartDate,
             @RequestParam(required = false) Date sentEndDate,
             @RequestParam(required = false) Date sentOnAverageStartDate,
             @RequestParam(required = false) Date sentOnAverageEndDate,
-            @RequestParam(required = false) Date acknowledgedStartDate,
-            @RequestParam(required = false) Date acknowledgedEndDate,
-            @RequestParam(required = false) Date acknowledgedOnAverageStartDate,
-            @RequestParam(required = false) Date acknowledgedOnAverageEndDate,
             @RequestParam(defaultValue = "NOOP") DivideBy divideBy) {
         List<Mono<?>> counts = new LinkedList<>();
         MessageStatisticsDTO statistics = new MessageStatisticsDTO();
@@ -178,20 +176,6 @@ public class MessageController {
                                 areSystemMessages)
                         .doOnNext(statistics::setSentMessagesOnAverage));
             }
-//            if (acknowledgedStartDate != null || acknowledgedEndDate != null) {
-//                counts.add(messageService.countAcknowledgedMessages(
-//                        DateRange.of(acknowledgedStartDate, acknowledgedEndDate),
-//                        areGroupMessages,
-//                        areSystemMessages)
-//                        .doOnNext(statistics::setAcknowledgedMessages));
-//            }
-//            if (acknowledgedOnAverageStartDate != null || acknowledgedOnAverageEndDate != null) {
-//                counts.add(messageService.countAcknowledgedMessagesOnAverage(
-//                        DateRange.of(acknowledgedOnAverageStartDate, acknowledgedOnAverageEndDate),
-//                        areGroupMessages,
-//                        areSystemMessages)
-//                        .doOnNext(statistics::setAcknowledgedMessagesOnAverage));
-//            }
             if (counts.isEmpty() || sentStartDate != null || sentEndDate != null) {
                 counts.add(messageService.countSentMessages(
                                 DateRange.of(sentStartDate, sentEndDate),
@@ -209,24 +193,6 @@ public class MessageController {
                                 areSystemMessages)
                         .doOnNext(statistics::setSentMessagesOnAverageRecords));
             }
-//            if (acknowledgedStartDate != null && acknowledgedEndDate != null) {
-//                counts.add(dateTimeUtil.checkAndQueryBetweenDate(
-//                        DateRange.of(acknowledgedStartDate, acknowledgedEndDate),
-//                        divideBy,
-//                        messageService::countAcknowledgedMessages,
-//                        areGroupMessages,
-//                        areSystemMessages)
-//                        .doOnNext(statistics::setAcknowledgedMessagesRecords));
-//            }
-//            if (acknowledgedOnAverageStartDate != null && acknowledgedOnAverageEndDate != null) {
-//                counts.add(dateTimeUtil.checkAndQueryBetweenDate(
-//                        DateRange.of(acknowledgedOnAverageStartDate, acknowledgedOnAverageEndDate),
-//                        divideBy,
-//                        messageService::countAcknowledgedMessagesOnAverage,
-//                        areGroupMessages,
-//                        areSystemMessages)
-//                        .doOnNext(statistics::setAcknowledgedMessagesOnAverageRecords));
-//            }
             if (sentStartDate != null && sentEndDate != null) {
                 counts.add(dateTimeUtil.checkAndQueryBetweenDate(
                                 DateRange.of(sentStartDate, sentEndDate),

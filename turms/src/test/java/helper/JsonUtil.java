@@ -6,7 +6,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *       http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,24 +15,24 @@
  * limitations under the License.
  */
 
-package im.turms.turms.workflow.access.http.dto.request.admin;
+package helper;
 
-import com.mongodb.DBObject;
-import lombok.Data;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.util.Date;
+public class JsonUtil {
 
-/**
- * @author James Chen
- */
-@Data
-public final class AdminActionLogDTO {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private final String account;
-    private final Date logDate;
-    private final String ip;
-    private final String action;
-    private final DBObject params;
-    private final DBObject body;
+    private JsonUtil() {
+    }
+
+    public static String toJson(Object val) {
+        try {
+            return MAPPER.writeValueAsString(val);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException(e);
+        }
+    }
 
 }

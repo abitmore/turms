@@ -20,9 +20,11 @@ package im.turms.turms.workflow.access.http.filter;
 import im.turms.turms.workflow.access.http.permission.RequiredPermission;
 
 import java.util.Map;
+import java.util.Set;
 
 public record Api(
         RequiredPermission permission,
-        Map<String, String[]> illegalParams
+        Map<String, String[]> illegalParams,
+        Set<String> params
 ) {
 }

@@ -51,4 +51,8 @@ public final class CollectionUtil {
         return UnifiedSet.newSet(keys);
     }
 
+    public static <T> Set<T> newSet(int expectedSize) {
+        return UnifiedSet.newSet(MapUtil.getCapability(expectedSize));
+    }
+
 }

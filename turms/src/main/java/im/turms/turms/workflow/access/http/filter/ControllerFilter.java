@@ -21,8 +21,10 @@ import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 import im.turms.server.common.cluster.node.Node;
 import im.turms.server.common.logging.RequestLoggingContext;
+import im.turms.server.common.property.env.service.env.adminapi.LogProperties;
 import im.turms.server.common.tracing.TracingCloseableContext;
 import im.turms.server.common.tracing.TracingContext;
+import im.turms.server.common.util.CollectionUtil;
 import im.turms.turms.plugin.manager.TurmsPluginManager;
 import im.turms.turms.workflow.access.http.performance.InefficientParam;
 import im.turms.turms.workflow.access.http.permission.RequiredPermission;
@@ -53,6 +55,8 @@ import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.netty.DisposableServer;
+import reactor.netty.http.server.HttpServer;
 
 import javax.validation.constraints.NotNull;
 import java.nio.charset.StandardCharsets;
@@ -63,6 +67,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import static org.springframework.http.HttpHeaders.WWW_AUTHENTICATE;
 
@@ -106,6 +111,29 @@ public class ControllerFilter implements WebFilter {
         pluginEnabled = node.getSharedProperties().getPlugin().isEnabled();
         enableAdminApi = node.getSharedProperties().getService().getAdminApi().isEnabled();
         isOpenApiEnabled = springDocConfigProperties != null && springDocConfigProperties.getApiDocs().isEnabled();
+
+
+        DisposableServer server =
+                HttpServer.create()
+                        .handle((httpServerRequest, httpServerResponse) -> {
+                            httpServerRequest.receive()
+                        })
+                        .route(routes ->
+                                routes.route()
+                                routes.get("/hello",
+                                                (request, response) -> response.sendString(Mono.just("Hello World!")))
+                                        .post("/echo",
+                                                (request, response) -> response.send(request.receive().retain()))
+                                        .get("/path/{param}",
+                                                (request, response) -> response.sendString(Mono.just(request.param("param"))))
+                                        .ws("/ws",
+                                                (wsInbound, wsOutbound) -> wsOutbound.send(wsInbound.receive().retain())))
+                        .bindNow();
+
+        server.onDispose()
+                .block();
+
+
     }
 
     @Override
@@ -125,16 +153,21 @@ public class ControllerFilter implements WebFilter {
         return apiCache.computeIfAbsent(handlerMethod, method -> {
             RequiredPermission requiredPermission = method.getMethodAnnotation(RequiredPermission.class);
             Map<String, String[]> map = Collections.emptyMap();
-            for (MethodParameter parameter : method.getMethodParameters()) {
+            MethodParameter[] methodParameters = method.getMethodParameters();
+            int paramCount = methodParameters.length;
+            Set<String> params = paramCount == 0 ? Collections.emptySet() : CollectionUtil.newSet(paramCount);
+            for (int i = 0; i < paramCount; i++) {
+                MethodParameter parameter = methodParameters[i];
+                params.add(parameter.getParameterName());
                 InefficientParam param = parameter.getParameterAnnotation(InefficientParam.class);
                 if (param != null) {
                     if (map.isEmpty()) {
                         map = new HashMap<>(16);
                     }
-                    map.put(parameter.getParameterName(), param.efficientCompanions());
+//                    map.put(parameter.getParameterName(), param.efficientCompanions());
                 }
             }
-            return new Api(requiredPermission, map);
+            return new Api(requiredPermission, map, params);
         });
     }
 
@@ -142,9 +175,9 @@ public class ControllerFilter implements WebFilter {
             WebFilterChain chain,
             ServerWebExchange exchange,
             Api api) {
-        if (node.getSharedProperties().getService().getAdminApi().isAllowInefficientParams()) {
-            return chain.filter(exchange);
-        }
+//        if (node.getSharedProperties().getService().getAdminApi().isAllowInefficientParams()) {
+//            return chain.filter(exchange);
+//        }
         MultiValueMap<String, String> params = exchange.getRequest().getQueryParams();
         for (Map.Entry<String, String[]> entry : api.illegalParams().entrySet()) {
             String inefficientParam = entry.getKey();
@@ -273,25 +306,24 @@ public class ControllerFilter implements WebFilter {
             WebFilterChain chain,
             HandlerMethod handlerMethod,
             Api api) {
-        boolean logAdminAction = node.getSharedProperties().getService().getLog().isLogAdminAction();
+        LogProperties logProperties = node.getSharedProperties().getService().getAdminApi().getLog();
+        boolean isLogEnabled = logProperties.isEnabled();
         boolean triggerHandlers = pluginEnabled && !turmsPluginManager.getAdminActionHandlerList().isEmpty();
         Mono<Void> additionalMono;
-        if (logAdminAction || triggerHandlers) {
+        if (isLogEnabled || triggerHandlers) {
             ServerHttpRequest request = exchange.getRequest();
             String action = handlerMethod.getMethod().getName();
             String host = Objects.requireNonNull(request.getRemoteAddress()).getHostString();
-            DBObject params = null;
+            MultiValueMap<String, String> params = logProperties.isLogRequestParams()
+                    ? parseValidParams(request, api)
+                    : null;
             Mono<BasicDBObject> bodyMono;
-            if (node.getSharedProperties().getService().getLog().isLogAdminRequestParams()) {
-                params = parseValidParams(request, handlerMethod);
-            }
-            if (node.getSharedProperties().getService().getLog().isLogAdminRequestBody()) {
+            if (logProperties.isLogRequestBody()) {
                 bodyMono = parseValidBody(exchange);
                 exchange = replaceRequestBody(exchange);
             } else {
                 bodyMono = Mono.empty();
             }
-            DBObject finalParams = params;
             additionalMono = bodyMono.defaultIfEmpty(EMPTY_DBOJBECT).doOnNext(dbObject -> {
                 DBObject body = dbObject != EMPTY_DBOJBECT ? dbObject : null;
                 adminActionLogService.tryLogAndTriggerHandlers(
@@ -299,7 +331,7 @@ public class ControllerFilter implements WebFilter {
                         new Date(),
                         host,
                         action,
-                        finalParams,
+                        params,
                         body);
             }).then();
         } else {
@@ -324,26 +356,11 @@ public class ControllerFilter implements WebFilter {
     /**
      * Valid query params are the params requested by API
      */
-    private DBObject parseValidParams(ServerHttpRequest request, HandlerMethod handlerMethod) {
-        MethodParameter[] methodParameters = handlerMethod.getMethodParameters();
+    private MultiValueMap<String, String> parseValidParams(ServerHttpRequest request, Api api) {
+        Set<String> methodParams = api.params();
         MultiValueMap<String, String> queryParams = request.getQueryParams();
-        BasicDBObject params = null;
-        if (methodParameters.length > 0 && !queryParams.isEmpty()) {
-            params = new BasicDBObject(queryParams.size());
-            for (MethodParameter methodParameter : methodParameters) {
-                String parameterName = methodParameter.getParameterName();
-                if (parameterName != null) {
-                    String value = queryParams.getFirst(parameterName);
-                    if (value != null) {
-                        params.put(parameterName, value);
-                    }
-                }
-            }
-            if (params.isEmpty()) {
-                params = EMPTY_DBOJBECT;
-            }
-        }
-        return params;
+        queryParams.keySet().removeIf(param -> !methodParams.contains(param));
+        return queryParams;
     }
 
     private Mono<BasicDBObject> parseValidBody(@NotNull ServerWebExchange exchange) {

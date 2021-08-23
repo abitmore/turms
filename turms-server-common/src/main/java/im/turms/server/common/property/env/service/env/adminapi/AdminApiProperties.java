@@ -6,7 +6,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *       http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package im.turms.server.common.property.env.service.env;
+package im.turms.server.common.property.env.service.env.adminapi;
 
 import com.fasterxml.jackson.annotation.JsonView;
 import im.turms.server.common.property.env.common.AddressProperties;
@@ -101,6 +101,10 @@ public class AdminApiProperties {
     @JsonView(MutablePropertiesView.class)
     @NestedConfigurationProperty
     private AddressProperties address = new AddressProperties();
+
+    @JsonView(MutablePropertiesView.class)
+    @NestedConfigurationProperty
+    private LogProperties log = new LogProperties();
 
     public enum AllowedPerformanceLevel {
         /**

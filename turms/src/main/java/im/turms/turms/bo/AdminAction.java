@@ -19,6 +19,7 @@ package im.turms.turms.bo;
 
 import com.mongodb.DBObject;
 import lombok.Data;
+import org.springframework.util.MultiValueMap;
 
 import java.util.Date;
 
@@ -36,7 +37,7 @@ public final class AdminAction {
 
     private final String action;
 
-    private final DBObject params;
+    private final MultiValueMap<String, String> params;
 
     private final DBObject body;
 
